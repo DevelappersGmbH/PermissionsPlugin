@@ -49,6 +49,10 @@
                 Clicked="ButtonPermission_OnClicked"
                 StyleId="Storage"
                 Text="Storage" />
+			<Button
+                Clicked="ButtonPermission_OnClicked"
+                StyleId="Bluetooth"
+                Text="Bluetooth" />
         </StackLayout>
     </ScrollView>
 </ContentPage>

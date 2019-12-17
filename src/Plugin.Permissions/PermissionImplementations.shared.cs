@@ -278,4 +278,20 @@ namespace Plugin.Permissions
 			PermissionsImplementation.RequestSpeechPermission();
 #endif
 	}
+
+	public class BluetoothPermission : BasePermission
+	{
+		public BluetoothPermission() : base(Permission.Bluetooth)
+		{
+
+		}
+#if __IOS__
+		public override Task<PermissionStatus> CheckPermissionStatusAsync() =>
+			Task.FromResult(PermissionsImplementation.GetBluetoothPermissionStatus);
+
+
+		public override Task<PermissionStatus> RequestPermissionAsync() =>
+			PermissionsImplementation.RequestBluetoothPermission();
+#endif
+	}
 }

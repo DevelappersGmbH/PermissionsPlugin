@@ -1,4 +1,5 @@
 using AVFoundation;
+using CoreBluetooth;
 using CoreLocation;
 using Foundation;
 using Photos;
@@ -79,6 +80,8 @@ namespace Plugin.Permissions
 					return Task.FromResult(SensorsPermissionStatus);
 				case Permission.Speech:
 					return Task.FromResult(SpeechPermissionStatus);
+				case Permission.Bluetooth:
+					return Task.FromResult(GetBluetoothPermissionStatus);
 			}
 			return Task.FromResult(PermissionStatus.Granted);
 		}
@@ -133,6 +136,9 @@ namespace Plugin.Permissions
 						break;
 					case Permission.Speech:
 						results.Add(permission, await RequestSpeechPermission());
+						break;
+					case Permission.Bluetooth:
+						results.Add(permission, await RequestBluetoothPermission());
 						break;
 				}
 
@@ -652,9 +658,9 @@ namespace Plugin.Permissions
 #endif
 		}
 
-#endregion
+		#endregion
 
-#region Events
+		#region Events
 #if __IOS__
 		internal static PermissionStatus GetEventPermissionStatus(EKEntityType eventType)
 		{
@@ -686,7 +692,139 @@ namespace Plugin.Permissions
 			return results.Item1 ? PermissionStatus.Granted : PermissionStatus.Denied;
 		}
 #endif
-#endregion
+		#endregion
+
+
+		#region Bluetooth
+
+		internal static CBCentralManager cbCentralManager;
+		internal static CBPeripheral peripheral;
+		public static TimeSpan BluetoothPermissionTimeout { get; set; } = new TimeSpan(0, 0, 8);
+
+		internal static Task<PermissionStatus> RequestBluetoothPermission()
+		{
+			if (GetBluetoothPermissionStatus != PermissionStatus.Unknown)
+				return Task.FromResult(GetBluetoothPermissionStatus);
+
+			if (!UIDevice.CurrentDevice.CheckSystemVersion(8, 0))
+			{
+				return Task.FromResult(PermissionStatus.Unknown);
+			}
+
+			cbCentralManager = new CBCentralManager();
+			var previousState = cbCentralManager.State;
+			var tcs = new TaskCompletionSource<PermissionStatus>();
+
+			cbCentralManager.UpdatedState += CbAuthorizationChanged;
+
+			void CbAuthorizationChanged(object sender, EventArgs e)
+			{
+				var bluetoothStateOnStateReady = ((CBCentralManager)sender).State;
+				
+				Console.WriteLine(bluetoothStateOnStateReady);
+
+				switch (bluetoothStateOnStateReady)
+				{
+					case CBCentralManagerState.Unauthorized:
+						Debug.Write("Unauthorized");
+						break;
+					case CBCentralManagerState.Unknown:
+						Debug.Write("Unknown");
+						break;
+					case CBCentralManagerState.Unsupported:
+						Debug.Write("Unsupported");
+						break;
+					case CBCentralManagerState.PoweredOn:
+						Debug.Write("PoweredOn");
+						break;
+					case CBCentralManagerState.PoweredOff:
+						Debug.Write("PoweredOff");
+						break;
+					case CBCentralManagerState.Resetting:
+						Debug.Write("Resetting");
+						break;
+					default:
+						Debug.Write("Default");
+						break;
+				}
+
+				if (bluetoothStateOnStateReady == CBCentralManagerState.Unsupported)
+					return;
+
+				if (previousState != CBCentralManagerState.PoweredOn)
+				{
+					
+						WithTimeout(tcs.Task, BluetoothPermissionTimeout).ContinueWith((t) =>
+						{
+							//wait 10 seconds and check to see if it is completed or not.
+							if (!tcs.Task.IsCompleted)
+							{
+								cbCentralManager.UpdatedState -= CbAuthorizationChanged;
+								tcs.TrySetResult(GetBluetoothPermissionStatus);
+							}
+						});
+						return;
+					
+				}
+
+				cbCentralManager.UpdatedState -= CbAuthorizationChanged;
+
+				tcs.TrySetResult(GetBluetoothPermissionStatus);
+
+			}
+
+			var info = NSBundle.MainBundle.InfoDictionary;
+
+			if (UIDevice.CurrentDevice.CheckSystemVersion(13, 0))
+			{
+				if (info.ContainsKey(new NSString("NSBluetoothAlwaysUsageDescription")))
+				{
+
+				}
+				else
+				{
+					throw new UnauthorizedAccessException("On iOS 13.0 and higher you must set NSBluetoothAlwaysUsageDescription in your Info.plist file to enable Authorization Requests for bluetooth permission!");
+				}
+			}
+			else
+			{
+				if (info.ContainsKey(new NSString("NSBluetoothPeripheralUsageDescription")))
+				{
+
+				}
+				else
+				{
+					throw new UnauthorizedAccessException("On iOS 12.4.4 and lower you must set NSBluetoothPeripheralUsageDescription in your Info.plist file to enable Authorization Requests for bluetooth permission!");
+
+				}
+			}
+
+			return tcs.Task;
+			
+		}
+
+		internal static PermissionStatus GetBluetoothPermissionStatus
+		{
+			get
+			{
+				var status = CBManager.Authorization;
+				switch (status)
+				{
+					case CBManagerAuthorization.AllowedAlways:
+						return PermissionStatus.Granted;
+					case CBManagerAuthorization.NotDetermined:
+						return PermissionStatus.Unknown;
+					case CBManagerAuthorization.Denied:
+						return PermissionStatus.Denied;
+					case CBManagerAuthorization.Restricted:
+						return PermissionStatus.Restricted;
+					default:
+						return PermissionStatus.Unknown;
+				}
+			}
+		}
+
+		#endregion
 
 		public bool OpenAppSettings()
 		{

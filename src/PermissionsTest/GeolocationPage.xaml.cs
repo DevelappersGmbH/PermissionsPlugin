@@ -72,6 +72,9 @@ namespace PermissionsTest
 				case "MediaLibrary":
 					status = await CrossPermissions.Current.CheckPermissionStatusAsync<MediaLibraryPermission>();
 					break;
+				case "Bluetooth":
+					status = await CrossPermissions.Current.CheckPermissionStatusAsync<BluetoothPermission>();
+					break;
 			}
 
 			await DisplayAlert("Results", status.ToString(), "OK");
@@ -121,6 +124,9 @@ namespace PermissionsTest
 							break;
 						case "MediaLibrary":
 							status = await CrossPermissions.Current.RequestPermissionAsync<MediaLibraryPermission>();
+							break;
+						case "Bluetooth":
+							status = await CrossPermissions.Current.RequestPermissionAsync<BluetoothPermission>();
 							break;
 					}
 					await DisplayAlert("Results", status.ToString(), "OK");

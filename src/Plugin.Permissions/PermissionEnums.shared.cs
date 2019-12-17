@@ -125,6 +125,12 @@
 		/// iOS: Media Library
 		/// UWP: None/Not Supported	
 		/// </summary>	
-		MediaLibrary
+		MediaLibrary,
+		/// <summary>	
+		/// Android: None/Not Supported	
+		/// iOS: Bluetooth
+		/// UWP: None/Not Supported	
+		/// </summary>	
+		Bluetooth
 	}
 }
