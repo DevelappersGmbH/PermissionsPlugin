@@ -698,76 +698,35 @@ namespace Plugin.Permissions
 		#region Bluetooth
 
 		internal static CBCentralManager cbCentralManager;
-		internal static CBPeripheral peripheral;
 		public static TimeSpan BluetoothPermissionTimeout { get; set; } = new TimeSpan(0, 0, 8);
 
 		internal static Task<PermissionStatus> RequestBluetoothPermission()
 		{
 			if (GetBluetoothPermissionStatus != PermissionStatus.Unknown)
 				return Task.FromResult(GetBluetoothPermissionStatus);
-
-			if (!UIDevice.CurrentDevice.CheckSystemVersion(8, 0))
+			// CBCentralManager.OptionShowPowerAlertKey is available since iOS 7.0
+			if (!UIDevice.CurrentDevice.CheckSystemVersion(7, 0))
 			{
 				return Task.FromResult(PermissionStatus.Unknown);
 			}
 
-			cbCentralManager = new CBCentralManager();
-			var previousState = cbCentralManager.State;
 			var tcs = new TaskCompletionSource<PermissionStatus>();
 
-			cbCentralManager.UpdatedState += CbAuthorizationChanged;
+			//To disable bluetooth power alert
+			var options = new NSDictionary(CBCentralManager.OptionShowPowerAlertKey, false);
+			cbCentralManager = new CBCentralManager(null, null, options);
 
-			void CbAuthorizationChanged(object sender, EventArgs e)
+			var previousState = cbCentralManager.State;
+
+			cbCentralManager.UpdatedState += CbStateChanged;
+
+			void CbStateChanged(object sender, EventArgs e)
 			{
-				var bluetoothStateOnStateReady = ((CBCentralManager)sender).State;
+				var currentState = ((CBCentralManager)sender).State;
 				
-				Console.WriteLine(bluetoothStateOnStateReady);
+				Console.WriteLine(currentState);
 
-				switch (bluetoothStateOnStateReady)
-				{
-					case CBCentralManagerState.Unauthorized:
-						Debug.Write("Unauthorized");
-						break;
-					case CBCentralManagerState.Unknown:
-						Debug.Write("Unknown");
-						break;
-					case CBCentralManagerState.Unsupported:
-						Debug.Write("Unsupported");
-						break;
-					case CBCentralManagerState.PoweredOn:
-						Debug.Write("PoweredOn");
-						break;
-					case CBCentralManagerState.PoweredOff:
-						Debug.Write("PoweredOff");
-						break;
-					case CBCentralManagerState.Resetting:
-						Debug.Write("Resetting");
-						break;
-					default:
-						Debug.Write("Default");
-						break;
-				}
-
-				if (bluetoothStateOnStateReady == CBCentralManagerState.Unsupported)
-					return;
-
-				if (previousState != CBCentralManagerState.PoweredOn)
-				{
-					
-						WithTimeout(tcs.Task, BluetoothPermissionTimeout).ContinueWith((t) =>
-						{
-							//wait 10 seconds and check to see if it is completed or not.
-							if (!tcs.Task.IsCompleted)
-							{
-								cbCentralManager.UpdatedState -= CbAuthorizationChanged;
-								tcs.TrySetResult(GetBluetoothPermissionStatus);
-							}
-						});
-						return;
-					
-				}
-
-				cbCentralManager.UpdatedState -= CbAuthorizationChanged;
+				cbCentralManager.UpdatedState -= CbStateChanged;
 
 				tcs.TrySetResult(GetBluetoothPermissionStatus);
 
@@ -786,18 +745,6 @@ namespace Plugin.Permissions
 					throw new UnauthorizedAccessException("On iOS 13.0 and higher you must set NSBluetoothAlwaysUsageDescription in your Info.plist file to enable Authorization Requests for bluetooth permission!");
 				}
 			}
-			else
-			{
-				if (info.ContainsKey(new NSString("NSBluetoothPeripheralUsageDescription")))
-				{
-
-				}
-				else
-				{
-					throw new UnauthorizedAccessException("On iOS 12.4.4 and lower you must set NSBluetoothPeripheralUsageDescription in your Info.plist file to enable Authorization Requests for bluetooth permission!");
-
-				}
-			}
 
 			return tcs.Task;
 			
@@ -807,20 +754,24 @@ namespace Plugin.Permissions
 		{
 			get
 			{
-				var status = CBManager.Authorization;
-				switch (status)
+				if (UIDevice.CurrentDevice.CheckSystemVersion(13, 0))
 				{
-					case CBManagerAuthorization.AllowedAlways:
-						return PermissionStatus.Granted;
-					case CBManagerAuthorization.NotDetermined:
-						return PermissionStatus.Unknown;
-					case CBManagerAuthorization.Denied:
-						return PermissionStatus.Denied;
-					case CBManagerAuthorization.Restricted:
-						return PermissionStatus.Restricted;
-					default:
-						return PermissionStatus.Unknown;
+					
+					var status = CBManager.Authorization;
+					switch (status)
+					{
+						case CBManagerAuthorization.AllowedAlways:
+							return PermissionStatus.Granted;
+						case CBManagerAuthorization.Denied:
+							return PermissionStatus.Denied;
+						case CBManagerAuthorization.Restricted:
+							return PermissionStatus.Restricted;
+						default:
+							return PermissionStatus.Unknown;
+					}
 				}
+				return PermissionStatus.Granted;
+
 			}
 		}
 
